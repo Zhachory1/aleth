@@ -1,0 +1,5 @@
+{
+  "name": "Aleth - Automated Fact Checker",
+  "description": "Aleth (Greek: Truth) - An automated fact-checking system powered by Gemini 2.5 Flash. Analyze text, URLs, and images to determine truthfulness using real-time Google Search grounding.",
+  "requestFramePermissions": []
+}
