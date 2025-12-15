@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        allowed_hosts: [
+            "aleth.onrender.com"
+        ]
       },
       plugins: [react()],
       define: {
