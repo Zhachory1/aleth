@@ -1,6 +1,70 @@
 import { GoogleGenAI, Part } from "@google/genai";
 import { FactCheckResult, FactCategory, MisleadingSubCategory, WebSource, ExternalCheck } from "../types";
 
+// Rate Limiting Configuration
+const RATE_LIMIT_MAX_REQUESTS = 2;
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+// In-memory rate limit store (per session/user)
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+// Get or create a user identifier (using a simple session-based approach)
+const getUserIdentifier = (): string => {
+  // Try to get existing identifier from sessionStorage
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    let userId = sessionStorage.getItem('aleth_user_id');
+    if (!userId) {
+      userId = `user_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      sessionStorage.setItem('aleth_user_id', userId);
+    }
+    return userId;
+  }
+  // Fallback for server-side or when sessionStorage is unavailable
+  return 'default_user';
+};
+
+// Check and update rate limit
+const checkRateLimit = (userId: string): void => {
+  const now = Date.now();
+  const entry = rateLimitStore.get(userId);
+
+  if (!entry || now > entry.resetTime) {
+    // First request or window expired - reset counter
+    rateLimitStore.set(userId, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW_MS
+    });
+    return;
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    const secondsRemaining = Math.ceil((entry.resetTime - now) / 1000);
+    throw new Error(
+      `Rate limit exceeded. You can only make ${RATE_LIMIT_MAX_REQUESTS} requests per minute. ` +
+      `Please try again in ${secondsRemaining} seconds.`
+    );
+  }
+
+  // Increment counter
+  entry.count++;
+  rateLimitStore.set(userId, entry);
+};
+
+// Clean up expired entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, entry] of rateLimitStore.entries()) {
+    if (now > entry.resetTime) {
+      rateLimitStore.delete(userId);
+    }
+  }
+}, 60000); // Clean up every minute
+
 const parseJSONFromMarkdown = (text: string): any => {
   try {
     // Try to find JSON block
@@ -22,6 +86,10 @@ export const analyzeContent = async (
   input: string | File,
   inputType: 'TEXT' | 'URL' | 'IMAGE'
 ): Promise<FactCheckResult> => {
+  // Enforce rate limiting
+  const userId = getUserIdentifier();
+  checkRateLimit(userId);
+
   if (!process.env.API_KEY) {
     throw new Error("API Key is missing. Please set it in the environment.");
   }
