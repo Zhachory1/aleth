@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { InputType } from '../types';
 import { Search, Link as LinkIcon, Image as ImageIcon, FileText, Loader2, X } from 'lucide-react';
+import { validateImageInput, validateInputForAnalysis, validateTextInput, validateUrlInput } from '../services/inputValidation';
 
 interface InputSectionProps {
   onAnalyze: (input: string | File, type: InputType) => void;
@@ -12,24 +13,39 @@ const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, isLoading }) => 
   const [textInput, setTextInput] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const currentValidation = () => {
+    if (activeTab === InputType.TEXT) return validateTextInput(textInput);
+    if (activeTab === InputType.URL) return validateUrlInput(urlInput);
+    return validateImageInput(selectedFile);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
 
-    if (activeTab === InputType.TEXT && textInput.trim()) {
-      onAnalyze(textInput, InputType.TEXT);
-    } else if (activeTab === InputType.URL && urlInput.trim()) {
-      onAnalyze(urlInput, InputType.URL);
-    } else if (activeTab === InputType.IMAGE && selectedFile) {
+    const validation = currentValidation();
+    if (!validation.ok) {
+      setValidationError(validation.error || 'Invalid input.');
+      return;
+    }
+
+    setValidationError(null);
+    if (activeTab === InputType.TEXT) {
+      onAnalyze(textInput.trim(), InputType.TEXT);
+    } else if (activeTab === InputType.URL) {
+      onAnalyze(urlInput.trim(), InputType.URL);
+    } else if (selectedFile) {
       onAnalyze(selectedFile, InputType.IMAGE);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
+    const file = e.target.files?.[0] || null;
+    const validation = validateInputForAnalysis(file as File, InputType.IMAGE);
+    setSelectedFile(validation.ok ? file : null);
+    setValidationError(validation.ok ? null : validation.error || 'Invalid image.');
   };
 
   return (
@@ -117,6 +133,12 @@ const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, isLoading }) => 
               </div>
             )}
           </div>
+        )}
+
+        {validationError && (
+          <p className="mt-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+            {validationError}
+          </p>
         )}
 
         <button
