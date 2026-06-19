@@ -9,8 +9,6 @@ const FeedbackSection: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real application, this would send data to a backend DB for RLHF.
-    // console.log({ rating, comment, timestamp: Date.now() });
     setSubmitted(true);
   };
 
@@ -21,7 +19,7 @@ const FeedbackSection: React.FC = () => {
           <Check className="text-green-400" size={24} />
         </div>
         <h3 className="text-white font-semibold text-lg">Thanks for your feedback!</h3>
-        <p className="text-green-200/70 text-sm mt-1">Your input has been queued for our review team to improve future model accuracy.</p>
+        <p className="text-green-200/70 text-sm mt-1">This prototype stores feedback only in your current browser session and does not send it to a review queue.</p>
       </div>
     );
   }
@@ -87,10 +85,9 @@ const FeedbackSection: React.FC = () => {
 
       {expandedInfo && (
         <div className="mt-4 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50 text-xs text-slate-400 leading-relaxed animate-in slide-in-from-top-2">
-          <strong className="text-slate-300 block mb-1">Human-in-the-Loop Learning</strong>
-          Your feedback is anonymized and sent to a review queue. Disputed results are manually verified by human fact-checkers. 
-          Confirmed corrections are added to our golden dataset, which is used to fine-tune future versions of the model via 
-          Reinforcement Learning from Human Feedback (RLHF). This helps the system learn from its mistakes and adapt to new forms of misinformation.
+          <strong className="text-slate-300 block mb-1">Prototype feedback</strong>
+          This feedback form is currently local-only. It helps test the interaction design, but it is not submitted to a backend,
+          not reviewed by human fact-checkers, and not used for RLHF or model fine-tuning.
         </div>
       )}
     </div>

@@ -1,7 +1,8 @@
 import { GoogleGenAI, Part } from "@google/genai";
-import { FactCheckResult, FactCategory, MisleadingSubCategory, WebSource } from "../types";
+import { FactCheckResult, FactCategory, InputType, MisleadingSubCategory, WebSource } from "../types";
 import { getGeminiConfig } from './config';
 import { validateGeminiResponse, ValidatedGeminiResponse } from './validation';
+import { validateInputForAnalysis } from './inputValidation';
 
 // Rate Limiting Configuration
 const RATE_LIMIT_MAX_REQUESTS = 2;
@@ -92,8 +93,13 @@ const parseJSONFromMarkdown = (text: string): ValidatedGeminiResponse | null => 
 
 export const analyzeContent = async (
   input: string | File,
-  inputType: 'TEXT' | 'URL' | 'IMAGE'
+  inputType: InputType
 ): Promise<FactCheckResult> => {
+  const validation = validateInputForAnalysis(input, inputType);
+  if (!validation.ok) {
+    throw new Error(validation.error || 'Invalid input.');
+  }
+
   // Enforce rate limiting
   const userId = getUserIdentifier();
   checkRateLimit(userId);
@@ -165,9 +171,7 @@ export const analyzeContent = async (
   try {
     const response = await ai.models.generateContent({
       model: config.model,
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt }, ...parts] }
-      ],
+      contents: [{ text: systemPrompt }, ...parts],
       config: {
         ...(config.enableGrounding ? { tools: [{ googleSearch: {} }] } : {}),
         temperature: config.temperature,
