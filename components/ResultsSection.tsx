@@ -2,6 +2,7 @@ import React from 'react';
 import { FactCheckResult, FactCategory, MisleadingSubCategory } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { ShieldCheck, ShieldAlert, AlertTriangle, Info, ExternalLink, Globe, Landmark } from 'lucide-react';
+import { safeGetHostname } from '../services/validation';
 
 interface ResultsSectionProps {
   result: FactCheckResult;
@@ -160,7 +161,7 @@ const ResultsSection: React.FC<ResultsSectionProps> = ({ result }) => {
               >
                 <div className="flex-1 min-w-0 mr-3">
                   <p className="text-slate-200 font-medium text-sm truncate">{source.title}</p>
-                  <p className="text-slate-500 text-xs truncate">{new URL(source.uri).hostname}</p>
+                  <p className="text-slate-500 text-xs truncate">{safeGetHostname(source.uri)}</p>
                 </div>
                 <ExternalLink size={16} className="text-slate-500 group-hover:text-blue-400" />
               </a>

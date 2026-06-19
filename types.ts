@@ -42,6 +42,7 @@ export interface FactCheckResult {
   detailedAnalysis: string;
   groundingSources: WebSource[];
   externalFactChecks: ExternalCheck[];
+  modelUsed?: string; // Optional: track which Gemini model was used
 }
 
 export interface AnalysisHistoryItem extends FactCheckResult {

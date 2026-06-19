@@ -15,7 +15,10 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.GEMINI_MODEL': JSON.stringify(env.GEMINI_MODEL || 'gemini-2.5-flash'),
+        'process.env.GEMINI_TEMPERATURE': JSON.stringify(env.GEMINI_TEMPERATURE || '0.1'),
+        'process.env.GEMINI_ENABLE_GROUNDING': JSON.stringify(env.GEMINI_ENABLE_GROUNDING || 'true')
       },
       resolve: {
         alias: {

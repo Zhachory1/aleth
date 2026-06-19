@@ -1,5 +1,7 @@
 import { GoogleGenAI, Part } from "@google/genai";
-import { FactCheckResult, FactCategory, MisleadingSubCategory, WebSource, ExternalCheck } from "../types";
+import { FactCheckResult, FactCategory, MisleadingSubCategory, WebSource } from "../types";
+import { getGeminiConfig } from './config';
+import { validateGeminiResponse, ValidatedGeminiResponse } from './validation';
 
 // Rate Limiting Configuration
 const RATE_LIMIT_MAX_REQUESTS = 2;
@@ -65,21 +67,27 @@ setInterval(() => {
   }
 }, 60000); // Clean up every minute
 
-const parseJSONFromMarkdown = (text: string): any => {
+const parseJSONFromMarkdown = (text: string): ValidatedGeminiResponse | null => {
   try {
-    // Try to find JSON block
+    // Try to find JSON block in markdown fence
     const match = text.match(/```json\n([\s\S]*?)\n```/);
+    let rawData: unknown;
+    
     if (match && match[1]) {
-      return JSON.parse(match[1]);
+      rawData = JSON.parse(match[1]);
+    } else if (text.trim().startsWith('{')) {
+      // Fallback: try parsing the whole text if it looks like JSON
+      rawData = JSON.parse(text);
+    } else {
+      return null;
     }
-    // Fallback: try parsing the whole text if it looks like JSON
-    if (text.trim().startsWith('{')) {
-      return JSON.parse(text);
-    }
+    
+    // Validate the parsed data against the schema
+    return validateGeminiResponse(rawData);
   } catch (e) {
-    console.error("Failed to parse JSON from model output", e);
+    console.error("Failed to parse or validate JSON from model output", e);
+    return null;
   }
-  return null;
 };
 
 export const analyzeContent = async (
@@ -90,11 +98,9 @@ export const analyzeContent = async (
   const userId = getUserIdentifier();
   checkRateLimit(userId);
 
-  if (!process.env.API_KEY) {
-    throw new Error("API Key is missing. Please set it in the environment.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Load and validate configuration
+  const config = getGeminiConfig();
+  const ai = new GoogleGenAI({ apiKey: config.apiKey });
   
   // Prompt engineering for structured analysis
   const systemPrompt = `
@@ -158,13 +164,13 @@ export const analyzeContent = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: config.model,
       contents: [
         { role: 'user', parts: [{ text: systemPrompt }, ...parts] }
       ],
       config: {
-        tools: [{ googleSearch: {} }], // Enable grounding
-        temperature: 0.1, // Low temperature for factual accuracy
+        ...(config.enableGrounding ? { tools: [{ googleSearch: {} }] } : {}),
+        temperature: config.temperature,
       }
     });
 
@@ -184,18 +190,23 @@ export const analyzeContent = async (
     const uniqueSources = Array.from(new Map(sources.map(s => [s.uri, s])).values());
 
     if (!parsedData) {
-      throw new Error("Failed to parse analysis results.");
+      throw new Error(
+        "Failed to parse analysis results. The model output format was invalid or could not be validated."
+      );
     }
 
+    // parsedData is now validated by Zod schema
+    // Use nullish coalescing (??) instead of logical OR (||) to preserve valid 0 scores
     return {
-      truthScore: parsedData.truthScore || 0,
-      sourceCredibilityScore: parsedData.sourceCredibilityScore || 50,
-      category: parsedData.category as FactCategory || FactCategory.UNKNOWN,
-      subCategory: parsedData.subCategory as MisleadingSubCategory || null,
+      truthScore: parsedData.truthScore ?? 0,
+      sourceCredibilityScore: parsedData.sourceCredibilityScore ?? 50,
+      category: parsedData.category,
+      subCategory: parsedData.subCategory,
       summary: parsedData.summary || "No summary provided.",
       detailedAnalysis: parsedData.detailedAnalysis || textOutput,
       groundingSources: uniqueSources,
-      externalFactChecks: parsedData.externalFactChecks || []
+      externalFactChecks: parsedData.externalFactChecks || [],
+      modelUsed: config.model // Track which model was used
     };
 
   } catch (error) {
