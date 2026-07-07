@@ -123,6 +123,7 @@ export const analyzeContent = async (
        - 'Unreliable Sources' (Biased or non-credible source)
        - 'Misleading' (Intent to deceive)
        - 'Verified / High Credibility' (Accurate information)
+       - 'Insufficient Evidence' (not enough reliable evidence to verify or falsify)
 
     5. If 'Misleading', verify specific nature (Sub-Category):
        - 'Technically True' (True facts used to imply falsehood)
@@ -145,6 +146,10 @@ export const analyzeContent = async (
       "subCategory": string or null,
       "summary": string,
       "detailedAnalysis": string,
+      "confidenceState": "High" | "Medium" | "Low" | "Insufficient Evidence",
+      "evidenceQuotes": [
+         { "sourceUrl": "https://...", "quote": "short source quote/snippet used as evidence" }
+      ],
       "externalFactChecks": [
          { "organization": "Snopes", "rating": "False", "url": "..." }
       ]
@@ -210,6 +215,8 @@ export const analyzeContent = async (
       detailedAnalysis: parsedData.detailedAnalysis || textOutput,
       groundingSources: uniqueSources,
       externalFactChecks: parsedData.externalFactChecks || [],
+      evidenceQuotes: parsedData.evidenceQuotes || [],
+      confidenceState: parsedData.confidenceState || 'Low',
       modelUsed: config.model // Track which model was used
     };
 

@@ -15,6 +15,11 @@ const ExternalCheckSchema = z.object({
   url: z.string().url()
 }).strict();
 
+const EvidenceQuoteSchema = z.object({
+  sourceUrl: z.string().url(),
+  quote: z.string().min(1)
+}).strict();
+
 /**
  * Zod schema for the parsed Gemini response
  * Uses .strict() to reject unexpected fields (security: prevents prototype pollution)
@@ -26,6 +31,8 @@ const GeminiResponseSchema = z.object({
   subCategory: z.nativeEnum(MisleadingSubCategory).nullable(),
   summary: z.string(),
   detailedAnalysis: z.string(),
+  confidenceState: z.enum(['High', 'Medium', 'Low', 'Insufficient Evidence']).optional().default('Low'),
+  evidenceQuotes: z.array(EvidenceQuoteSchema).optional().default([]),
   externalFactChecks: z.array(ExternalCheckSchema).optional().default([])
 }).strict();
 

@@ -82,6 +82,7 @@ const ResultsSection: React.FC<ResultsSectionProps> = ({ result }) => {
             </div>
             <div>
               <h3 className="text-xl font-bold text-white">{result.category}</h3>
+              <p className="text-sm text-slate-400 mt-1">Confidence: {result.confidenceState}</p>
               {result.subCategory && result.subCategory !== MisleadingSubCategory.NONE && (
                 <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
                   {result.subCategory}
@@ -130,6 +131,25 @@ const ResultsSection: React.FC<ResultsSectionProps> = ({ result }) => {
                  ))}
               </div>
           </div>
+      )}
+
+      {/* Evidence snippets */}
+      {result.evidenceQuotes.length > 0 && (
+        <div className="mt-6 bg-slate-900/50 border border-emerald-500/30 rounded-2xl p-6">
+          <h3 className="text-sm font-semibold text-emerald-300 uppercase tracking-wider mb-4">
+            Evidence snippets
+          </h3>
+          <div className="space-y-3">
+            {result.evidenceQuotes.map((evidence, idx) => (
+              <blockquote key={idx} className="border-l-2 border-emerald-500 pl-4 text-slate-300">
+                <p className="italic">“{evidence.quote}”</p>
+                <a href={evidence.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-300 hover:text-emerald-200">
+                  {safeGetHostname(evidence.sourceUrl)}
+                </a>
+              </blockquote>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Analysis Details */}
