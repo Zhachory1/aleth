@@ -10,6 +10,7 @@ export enum FactCategory {
   UNRELIABLE = 'Unreliable Sources',
   MISLEADING = 'Misleading',
   VERIFIED = 'Verified / High Credibility',
+  INSUFFICIENT = 'Insufficient Evidence',
   UNKNOWN = 'Unknown'
 }
 
@@ -33,6 +34,13 @@ export interface ExternalCheck {
   url: string;
 }
 
+export interface EvidenceQuote {
+  sourceUrl: string;
+  quote: string;
+}
+
+export type ConfidenceState = 'High' | 'Medium' | 'Low' | 'Insufficient Evidence';
+
 export interface FactCheckResult {
   truthScore: number; // 0 to 100
   sourceCredibilityScore: number; // 0 to 100
@@ -42,7 +50,9 @@ export interface FactCheckResult {
   detailedAnalysis: string;
   groundingSources: WebSource[];
   externalFactChecks: ExternalCheck[];
-  modelUsed?: string; // Optional: track which Gemini model was used
+  evidenceQuotes: EvidenceQuote[];
+  confidenceState: ConfidenceState;
+  modelUsed?: string; // Optional: track which model was used
 }
 
 export interface AnalysisHistoryItem extends FactCheckResult {

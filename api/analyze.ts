@@ -15,10 +15,12 @@ Include externalFactChecks when available.
 Structure: {
   "truthScore": number,
   "sourceCredibilityScore": number,
-  "category": "Satire" | "Clickbait" | "Unreliable Sources" | "Misleading" | "Verified / High Credibility" | "Unknown",
+  "category": "Satire" | "Clickbait" | "Unreliable Sources" | "Misleading" | "Verified / High Credibility" | "Insufficient Evidence" | "Unknown",
   "subCategory": "Technically True" | "Partially True" | "Facts Twisted" | "False Context" | "Fabricated / Total Fake" | "N/A" | null,
   "summary": string,
   "detailedAnalysis": string,
+  "confidenceState": "High" | "Medium" | "Low" | "Insufficient Evidence",
+  "evidenceQuotes": [{ "sourceUrl": "https://...", "quote": "short source quote/snippet used as evidence" }],
   "externalFactChecks": [{ "organization": string, "rating": string, "url": string }]
 }`;
 
@@ -73,6 +75,8 @@ export default async function handler(request: Request): Promise<Response> {
     detailedAnalysis: parsedData.detailedAnalysis || textOutput,
     groundingSources,
     externalFactChecks: parsedData.externalFactChecks || [],
+    evidenceQuotes: parsedData.evidenceQuotes || [],
+    confidenceState: parsedData.confidenceState || 'Low',
     modelUsed: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
   });
 }

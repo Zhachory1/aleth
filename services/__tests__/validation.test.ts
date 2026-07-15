@@ -20,7 +20,34 @@ describe('validateGeminiResponse', () => {
     };
 
     const result = validateGeminiResponse(validData);
-    expect(result).toEqual(validData);
+    expect(result).toEqual({
+      ...validData,
+      confidenceState: 'Low',
+      evidenceQuotes: []
+    });
+  });
+
+  it('validates response with provenance fields', () => {
+    const dataWithEvidence = {
+      truthScore: 50,
+      sourceCredibilityScore: 60,
+      category: FactCategory.INSUFFICIENT,
+      subCategory: null,
+      summary: 'Not enough evidence',
+      detailedAnalysis: 'Sources do not establish the claim.',
+      confidenceState: 'Insufficient Evidence' as const,
+      evidenceQuotes: [
+        {
+          sourceUrl: 'https://example.com/source',
+          quote: 'Available records do not confirm the claim.'
+        }
+      ],
+      externalFactChecks: []
+    };
+
+    const result = validateGeminiResponse(dataWithEvidence);
+    expect(result.confidenceState).toBe('Insufficient Evidence');
+    expect(result.evidenceQuotes[0].quote).toContain('Available records');
   });
 
   it('validates response with external fact checks', () => {

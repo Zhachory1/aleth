@@ -1,4 +1,4 @@
-import { FactCheckResult, InputType } from "../types";
+import { FactCheckResult, InputType } from '../types';
 import { validateInputForAnalysis } from './inputValidation';
 
 const ANALYZE_API_PATH = import.meta.env.VITE_ANALYZE_API_PATH || '/api/analyze';
