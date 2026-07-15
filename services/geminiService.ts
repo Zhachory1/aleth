@@ -1,94 +1,18 @@
-import { GoogleGenAI, Part } from "@google/genai";
-import { FactCheckResult, FactCategory, InputType, MisleadingSubCategory, WebSource } from "../types";
-import { getGeminiConfig } from './config';
-import { validateGeminiResponse, ValidatedGeminiResponse } from './validation';
+import { FactCheckResult, InputType } from '../types';
 import { validateInputForAnalysis } from './inputValidation';
 
-// Rate Limiting Configuration
-const RATE_LIMIT_MAX_REQUESTS = 2;
-const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const ANALYZE_API_PATH = import.meta.env.VITE_ANALYZE_API_PATH || '/api/analyze';
 
-interface RateLimitEntry {
-  count: number;
-  resetTime: number;
-}
-
-// In-memory rate limit store (per session/user)
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-// Get or create a user identifier (using a simple session-based approach)
-const getUserIdentifier = (): string => {
-  // Try to get existing identifier from sessionStorage
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    let userId = sessionStorage.getItem('aleth_user_id');
-    if (!userId) {
-      userId = `user_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      sessionStorage.setItem('aleth_user_id', userId);
-    }
-    return userId;
-  }
-  // Fallback for server-side or when sessionStorage is unavailable
-  return 'default_user';
-};
-
-// Check and update rate limit
-const checkRateLimit = (userId: string): void => {
-  const now = Date.now();
-  const entry = rateLimitStore.get(userId);
-
-  if (!entry || now > entry.resetTime) {
-    // First request or window expired - reset counter
-    rateLimitStore.set(userId, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS
-    });
-    return;
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
-    const secondsRemaining = Math.ceil((entry.resetTime - now) / 1000);
-    throw new Error(
-      `Rate limit exceeded. You can only make ${RATE_LIMIT_MAX_REQUESTS} requests per minute. ` +
-      `Please try again in ${secondsRemaining} seconds.`
-    );
-  }
-
-  // Increment counter
-  entry.count++;
-  rateLimitStore.set(userId, entry);
-};
-
-// Clean up expired entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [userId, entry] of rateLimitStore.entries()) {
-    if (now > entry.resetTime) {
-      rateLimitStore.delete(userId);
-    }
-  }
-}, 60000); // Clean up every minute
-
-const parseJSONFromMarkdown = (text: string): ValidatedGeminiResponse | null => {
-  try {
-    // Try to find JSON block in markdown fence
-    const match = text.match(/```json\n([\s\S]*?)\n```/);
-    let rawData: unknown;
-    
-    if (match && match[1]) {
-      rawData = JSON.parse(match[1]);
-    } else if (text.trim().startsWith('{')) {
-      // Fallback: try parsing the whole text if it looks like JSON
-      rawData = JSON.parse(text);
-    } else {
-      return null;
-    }
-    
-    // Validate the parsed data against the schema
-    return validateGeminiResponse(rawData);
-  } catch (e) {
-    console.error("Failed to parse or validate JSON from model output", e);
-    return null;
-  }
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 };
 
 export const analyzeContent = async (
@@ -100,142 +24,24 @@ export const analyzeContent = async (
     throw new Error(validation.error || 'Invalid input.');
   }
 
-  // Enforce rate limiting
-  const userId = getUserIdentifier();
-  checkRateLimit(userId);
-
-  // Load and validate configuration
-  const config = getGeminiConfig();
-  const ai = new GoogleGenAI({ apiKey: config.apiKey });
-  
-  // Prompt engineering for structured analysis
-  const systemPrompt = `
-    You are Aleth, an automated world-class fact-checking system.
-    Your goal is to analyze the user input (Text, URL, or Image) and determine its truthfulness using Google Search.
-
-    1. **Search & Verify**: Search Google to verify the claims, image context, or URL content.
-    2. **Cross-Reference**: Explicitly search for existing fact-checks from reputable organizations like Snopes, PolitiFact, FactCheck.org, Reuters Fact Check, and AP News.
-    3. **Source Analysis**: Analyze the credibility of the source domain (if URL provided) or the likely origin of the claim. Consider domain age, known biases, and history of retraction.
-
-    4. **Categorize** into one of these High-Level Categories:
-       - 'Satire' (Humor, not meant to be taken seriously)
-       - 'Clickbait' (Exaggerated headlines, but maybe thin content)
-       - 'Unreliable Sources' (Biased or non-credible source)
-       - 'Misleading' (Intent to deceive)
-       - 'Verified / High Credibility' (Accurate information)
-       - 'Insufficient Evidence' (not enough reliable evidence to verify or falsify)
-
-    5. If 'Misleading', verify specific nature (Sub-Category):
-       - 'Technically True' (True facts used to imply falsehood)
-       - 'Partially True' (Mix of fact and fiction)
-       - 'Facts Twisted' (Real events re-interpreted falsely)
-       - 'False Context' (Real image/quote in wrong context)
-       - 'Fabricated / Total Fake' (Completely made up)
-       If not misleading, use null.
-
-    6. **Scoring**:
-       - 'truthScore' (0-100): 0 = Total Lie, 100 = Absolute Truth.
-       - 'sourceCredibilityScore' (0-100): 0 = Known Fake News Site, 100 = Gold Standard Journalism.
-
-    IMPORTANT: Output result as raw JSON inside \`\`\`json ... \`\`\`.
-    Structure:
-    {
-      "truthScore": number,
-      "sourceCredibilityScore": number,
-      "category": string,
-      "subCategory": string or null,
-      "summary": string,
-      "detailedAnalysis": string,
-      "confidenceState": "High" | "Medium" | "Low" | "Insufficient Evidence",
-      "evidenceQuotes": [
-         { "sourceUrl": "https://...", "quote": "short source quote/snippet used as evidence" }
-      ],
-      "externalFactChecks": [
-         { "organization": "Snopes", "rating": "False", "url": "..." }
-      ]
-    }
-  `;
-
-  let parts: (string | Part)[] = [];
-
-  if (inputType === 'IMAGE' && input instanceof File) {
-    const base64Data = await fileToBase64(input);
-    parts.push({
-      inlineData: {
-        mimeType: input.type,
-        data: base64Data
-      }
-    });
-    parts.push({ text: "Analyze this image for manipulation, context, or fake news." });
-  } else if (inputType === 'URL') {
-    parts.push({ text: `Analyze the credibility and content of this URL: ${input}` });
+  const body: Record<string, unknown> = { inputType };
+  if (inputType === InputType.IMAGE && input instanceof File) {
+    body.image = {
+      mimeType: input.type,
+      data: await fileToBase64(input),
+    };
   } else {
-    parts.push({ text: `Verify this claim/text: "${input}"` });
+    body.input = input;
   }
 
-  try {
-    const response = await ai.models.generateContent({
-      model: config.model,
-      contents: [{ text: systemPrompt }, ...parts],
-      config: {
-        ...(config.enableGrounding ? { tools: [{ googleSearch: {} }] } : {}),
-        temperature: config.temperature,
-      }
-    });
-
-    const textOutput = response.text || "";
-    const parsedData = parseJSONFromMarkdown(textOutput);
-
-    // Extract Grounding Sources
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const sources: WebSource[] = groundingChunks
-      .filter((chunk: any) => chunk.web?.uri && chunk.web?.title)
-      .map((chunk: any) => ({
-        uri: chunk.web.uri,
-        title: chunk.web.title
-      }));
-    
-    // Deduplicate sources based on URI
-    const uniqueSources = Array.from(new Map(sources.map(s => [s.uri, s])).values());
-
-    if (!parsedData) {
-      throw new Error(
-        "Failed to parse analysis results. The model output format was invalid or could not be validated."
-      );
-    }
-
-    // parsedData is now validated by Zod schema
-    // Use nullish coalescing (??) instead of logical OR (||) to preserve valid 0 scores
-    return {
-      truthScore: parsedData.truthScore ?? 0,
-      sourceCredibilityScore: parsedData.sourceCredibilityScore ?? 50,
-      category: parsedData.category,
-      subCategory: parsedData.subCategory,
-      summary: parsedData.summary || "No summary provided.",
-      detailedAnalysis: parsedData.detailedAnalysis || textOutput,
-      groundingSources: uniqueSources,
-      externalFactChecks: parsedData.externalFactChecks || [],
-      evidenceQuotes: parsedData.evidenceQuotes || [],
-      confidenceState: parsedData.confidenceState || 'Low',
-      modelUsed: config.model // Track which model was used
-    };
-
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
-  }
-};
-
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove Data URI prefix (e.g. "data:image/jpeg;base64,")
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+  const response = await fetch(ANALYZE_API_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to analyze content.');
+  }
+  return data as FactCheckResult;
 };

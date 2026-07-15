@@ -5,7 +5,7 @@
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set `GEMINI_API_KEY` only in your backend/serverless environment
 3. Run the app:
    `npm run dev`
 
@@ -14,8 +14,11 @@
 You can configure Gemini model settings in your `.env.local` file:
 
 ```bash
-# Required: Your Gemini API key
+# Required server-side only: your Gemini API key
 GEMINI_API_KEY=your_api_key_here
+
+# Optional browser-facing backend path (default: /api/analyze)
+VITE_ANALYZE_API_PATH=/api/analyze
 
 # Optional: Gemini model to use (default: gemini-2.5-flash)
 GEMINI_MODEL=gemini-2.5-flash

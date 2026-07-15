@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import InputSection from './components/InputSection';
 import ResultsSection from './components/ResultsSection';
 import FeedbackSection from './components/FeedbackSection';
@@ -10,13 +10,6 @@ const App: React.FC = () => {
   const [result, setResult] = useState<FactCheckResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Checking for API Key on mount
-  useEffect(() => {
-    if (!process.env.API_KEY) {
-      setError("Critical Error: API Key is not configured in the environment.");
-    }
-  }, []);
 
   const handleAnalyze = async (input: string | File, type: InputType) => {
     setIsLoading(true);
